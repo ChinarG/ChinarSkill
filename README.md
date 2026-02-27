@@ -1,43 +1,45 @@
 # ChinarSkill
 
-个人技能仓库 - 用于存放自定义 OpenClaw Skills
-
-## 结构
-
-```
-ChinarSkill/
-├── skills/                 # 技能目录
-│   └── feishu-video-sender/  # 飞书视频发送技能
-├── LICENSE
-└── README.md
-```
+个人 OpenClaw Skills 仓库
 
 ## Skills
 
 ### feishu-video-sender
-飞书视频发送工具，用于通过 API 发送视频文件到飞书。
+通过飞书 API 发送视频文件。
 
-## 使用
+**功能:**
+- 上传视频到飞书 IM
+- 发送视频消息到指定用户
+- 支持环境变量和命令行参数
+
+**使用:**
+```bash
+cd skills/feishu-video-sender
+export FEISHU_APP_ID="your_app_id"
+export FEISHU_APP_SECRET="your_app_secret"
+python3 scripts/send-video.py --file video.mp4 --to ou_xxx
+```
+
+详见 [skills/feishu-video-sender/SKILL.md](skills/feishu-video-sender/SKILL.md)
+
+## 安全提示
+
+所有技能都**不包含**硬编码的密钥或敏感信息。凭证通过以下方式传入：
+- 环境变量
+- 命令行参数
+- 配置文件（用户自行创建，不提交到仓库）
+
+## 安装 Skill
 
 ```bash
 # 克隆仓库
-git clone <repository-url>
+git clone <your-repo-url>
 
-# 安装技能
-cd skills/feishu-video-sender
+# 安装依赖
+cd skills/<skill-name>
 pip install -r requirements.txt
-
-# 使用
-python3 src/send-video.py --file video.mp4 --to ou_xxx
 ```
 
-## 开发规范
+## License
 
-1. 每个技能放在 `skills/` 目录下的独立文件夹
-2. 必须包含 `README.md` 和 `skill.json`
-3. Python 技能需要 `requirements.txt`
-4. 代码需要注释和类型提示
-
-## 提交记录
-
-- 2026-02-27: 创建仓库，添加 feishu-video-sender 技能
+MIT
