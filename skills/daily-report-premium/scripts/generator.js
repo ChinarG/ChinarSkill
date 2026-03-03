@@ -7,15 +7,13 @@
  * 2. 生成/获取狗狗情绪图片
  * 3. 将数据注入 HTML 模板
  * 4. 使用 Playwright 录制 6-8 秒视频
- * 5. 上传到飞书云盘并发送视频消息
+ * 5. 通过 OpenClaw message 工具发送视频到飞书
  */
 
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const axios = require('axios');
-const FormData = require('form-data');
 
 // 配置
 const CONFIG = {
@@ -23,142 +21,8 @@ const CONFIG = {
     height: 1080,
     videoDuration: 6000, // 6秒
     fps: 20,
-    outputDir: '/root/.openclaw/workspace/daily-report-output',
-    // 飞书配置 - 需要从环境变量或配置文件读取
-    feishu: {
-        appId: process.env.FEISHU_APP_ID || '',
-        appSecret: process.env.FEISHU_APP_SECRET || '',
-        receiverOpenId: process.env.FEISHU_RECEIVER_OPEN_ID || 'ou_ceb518d7c2b872e794f0c9374889b36d'
-    }
+    outputDir: '/root/.openclaw/workspace/daily-report-output'
 };
-
-/**
- * 获取飞书 tenant_access_token
- */
-async function getFeishuToken() {
-    try {
-        const response = await axios.post(
-            'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
-            {
-                app_id: CONFIG.feishu.appId,
-                app_secret: CONFIG.feishu.appSecret
-            }
-        );
-        
-        if (response.data.code === 0) {
-            return response.data.tenant_access_token;
-        } else {
-            throw new Error(`获取 token 失败: ${response.data.msg}`);
-        }
-    } catch (error) {
-        console.error('❌ 获取飞书 token 失败:', error.message);
-        console.log('💡 提示: 请设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET 环境变量');
-        throw error;
-    }
-}
-
-/**
- * 上传视频到飞书云盘
- */
-async function uploadVideoToFeishu(videoPath, token) {
-    console.log('📤 上传视频到飞书云盘...');
-    
-    const form = new FormData();
-    form.append('file', fs.createReadStream(videoPath));
-    form.append('file_type', 'mp4');
-    form.append('file_name', path.basename(videoPath));
-    
-    try {
-        const response = await axios.post(
-            'https://open.feishu.cn/open-apis/drive/v1/medias/upload_all',
-            form,
-            {
-                headers: {
-                    ...form.getHeaders(),
-                    'Authorization': `Bearer ${token}`
-                },
-                maxBodyLength: Infinity,
-                maxContentLength: Infinity
-            }
-        );
-        
-        if (response.data.code === 0) {
-            const fileKey = response.data.data.file_key;
-            console.log(`✅ 上传成功，file_key: ${fileKey}`);
-            return fileKey;
-        } else {
-            throw new Error(`上传失败: ${response.data.msg}`);
-        }
-    } catch (error) {
-        console.error('❌ 上传视频失败:', error.message);
-        if (error.response) {
-            console.error('响应:', error.response.data);
-        }
-        throw error;
-    }
-}
-
-/**
- * 发送视频消息到飞书
- */
-async function sendVideoMessage(fileKey, token, message = '') {
-    console.log('📨 发送视频消息...');
-    
-    const content = {
-        file_key: fileKey
-    };
-    
-    try {
-        // 如果有文字消息，先发送文字
-        if (message) {
-            await axios.post(
-                'https://open.feishu.cn/open-apis/im/v1/messages',
-                {
-                    receive_id: CONFIG.feishu.receiverOpenId,
-                    msg_type: 'text',
-                    content: JSON.stringify({ text: message })
-                },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    params: { receive_id_type: 'open_id' }
-                }
-            );
-        }
-        
-        // 发送视频
-        const response = await axios.post(
-            'https://open.feishu.cn/open-apis/im/v1/messages',
-            {
-                receive_id: CONFIG.feishu.receiverOpenId,
-                msg_type: 'media',
-                content: JSON.stringify(content)
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                params: { receive_id_type: 'open_id' }
-            }
-        );
-        
-        if (response.data.code === 0) {
-            console.log('✅ 视频消息发送成功');
-            return response.data.data;
-        } else {
-            throw new Error(`发送失败: ${response.data.msg}`);
-        }
-    } catch (error) {
-        console.error('❌ 发送视频消息失败:', error.message);
-        if (error.response) {
-            console.error('响应:', error.response.data);
-        }
-        throw error;
-    }
-}
 
 /**
  * Step 1: 聚合今日数据
@@ -268,6 +132,7 @@ async function recordVideo(htmlPath) {
 
 /**
  * Step 5: 推送到飞书
+ * 使用 OpenClaw 的 message 工具发送视频
  */
 async function sendToFeishu(videoPath) {
     console.log('\n📤 Step 5: 推送到飞书...');
@@ -280,16 +145,16 @@ async function sendToFeishu(videoPath) {
     console.log(`📎 视频文件: ${videoPath}`);
     console.log(`📊 文件大小: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
     
-    // 获取飞书 token
-    const token = await getFeishuToken();
+    // 返回视频信息，由调用者使用 message 工具发送
+    // 或者直接调用 OpenClaw 的 CLI 命令
+    console.log('\n💡 请使用以下命令发送视频:');
+    console.log(`  openclaw message send --media "${videoPath}" --message "主人，今日系统运转情报已送达。"`);
     
-    // 上传视频
-    const fileKey = await uploadVideoToFeishu(videoPath, token);
-    
-    // 发送消息
-    await sendVideoMessage(fileKey, token, "主人，今日系统运转情报已送达。");
-    
-    return { videoPath, fileKey, success: true };
+    return { 
+        videoPath, 
+        message: "主人，今日系统运转情报已送达。",
+        success: true 
+    };
 }
 
 /**
@@ -316,7 +181,11 @@ async function main() {
         
         const result = await sendToFeishu(videoPath);
         
-        console.log('\n✨ 日报生成并发送完成!');
+        console.log('\n✨ 日报生成完成!');
+        console.log('\n📋 结果:');
+        console.log('  视频路径:', result.videoPath);
+        console.log('  发送命令: openclaw message send --media "' + result.videoPath + '" --message "' + result.message + '"');
+        
         return result;
         
     } catch (error) {
